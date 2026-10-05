@@ -926,6 +926,13 @@ GPS::run()
 		param_get(handle, &f9p_uart2_baudrate);
 	}
 
+	handle = param_find("GPS_UBX_RAWX");
+	int32_t rawx_output = 0;
+
+	if (handle != PARAM_INVALID) {
+		param_get(handle, &rawx_output);
+	}
+
 	handle = param_find("GPS_UBX_PPK");
 	int32_t ppk_output = 0;
 
@@ -1031,6 +1038,7 @@ GPS::run()
 					.heading_offset = heading_offset,
 					.uart2_baudrate = f9p_uart2_baudrate,
 					.ppk_output = ppk_output > 0,
+					.rawx_output = rawx_output > 0,
 					.jam_det_sensitivity_hi = jam_det_sensitivity_hi > 0,
 					.mode = ubx_mode,
 				};
