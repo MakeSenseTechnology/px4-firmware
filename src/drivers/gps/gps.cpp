@@ -705,14 +705,28 @@ void GPS::injectRtcmFrames(gnss::Rtcm3Parser &parser, perf_counter_t injection_p
 		if (_interface == GPSHelper::Interface::UART) {
 			ssize_t tx_available = _uart.txSpaceAvailable();
 
-			if ((ssize_t)frame_len > tx_available) {
+			if (tx_available < 0)
+			{
+				const int query_errno = errno;
+
+				if (query_errno != ENOSYS) {
+					PX4_WARN("UART txSpaceAvailable() failed: %d", query_errno);
+					break;
+				}
+
+				// Some UART drivers (e.g. QuRT) don't support TX-space query (errno == ENOSYS)
+				// Attempt the write and check its result.
+				// The underlying UART API determines buffering and blocking behavior (QuRT UART write is blocking).
+			} else if ((ssize_t)frame_len > tx_available) {
 				// TX buffer full, stop and let it drain - frames stay in parser buffer
 				perf_count(_uart_tx_buffer_full_perf);
 				break;
 			}
 		}
 
-		injectData(frame_ptr, frame_len);
+		if (!injectData(frame_ptr, frame_len)) {
+			break;
+		}
 		parser.consumeMessage(frame_len);
 		perf_count(injection_perf);
 	}
