@@ -155,6 +155,18 @@ parameters:
       min: 0
       max: 32
       reboot_required: true
+    GPS_UBX_RAWX:
+      description:
+        short: Enable u-blox RXM-RAWX output
+        long: |-
+          Enable raw observations once per measurement epoch on RAWX-capable
+          receivers. Set GPS_DUMP_COMM to 1 to capture the bytes in gps_dump.
+          Requires sufficient UART bandwidth. Does not change the measurement
+          rate or enable RTCM/PPK output. Unsupported receivers may reject
+          configuration when enabled.
+      type: boolean
+      default: 0
+      reboot_required: true
     GPS_UBX_PPK:
       description:
         short: Enable MSM7 message output for PPK workflow
