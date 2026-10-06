@@ -615,6 +615,9 @@ void GPS::drainRtcmCorrections()
 	do {
 		if (updated) {
 			num_injections++;
+			PX4_INFO("RTCM received: len=%u device=%u",
+         		static_cast<unsigned>(msg.len),
+         		static_cast<unsigned>(msg.device_id));
 
 			// Prevent injection of data from self
 			if (msg.device_id != get_device_id()) {
@@ -701,6 +704,8 @@ void GPS::injectRtcmFrames(gnss::Rtcm3Parser &parser, perf_counter_t injection_p
 	const uint8_t *frame_ptr = {};
 
 	while ((frame_ptr = parser.getNextMessage(&frame_len)) != nullptr) {
+		PX4_INFO("RTCM parsed: len=%u",static_cast<unsigned>(frame_len));
+
 		// Check TX buffer space before writing
 		if (_interface == GPSHelper::Interface::UART) {
 			ssize_t tx_available = _uart.txSpaceAvailable();
@@ -738,6 +743,9 @@ bool GPS::injectData(const uint8_t *data, size_t len)
 
 	size_t written = 0;
 
+	PX4_INFO("GPS injectData: before write len=%u",
+         static_cast<unsigned>(len));
+
 	if (_interface == GPSHelper::Interface::UART) {
 		written = _uart.write((const void *) data, len);
 
@@ -748,6 +756,10 @@ bool GPS::injectData(const uint8_t *data, size_t len)
 		::fsync(_spi_fd);
 #endif
 	}
+
+	PX4_INFO("GPS injectData: requested=%u returned=%d",
+         static_cast<unsigned>(len),
+         static_cast<int>(written));
 
 	return written == len;
 }
