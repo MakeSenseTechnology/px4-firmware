@@ -111,6 +111,14 @@ param load
 # Enable with POWER_MONITOR_ONLY=ENABLE in /etc/modalai/voxl-px4.conf
 if [ "$POWER_MONITOR_ONLY" == "ENABLE" ]; then
     /bin/echo "POWER_MONITOR_ONLY mode: starting only the $POWER_MANAGER power monitor"
+
+    # Battery fitted to the power-monitor-only rig: a 2S 1300 mAh pack. Set on
+    # every boot, before the driver starts, because PX4 initialises its state of
+    # charge from voltage only once at driver start and the saved parameter file
+    # can be reset to ModalAI's 3S defaults by voxl-configure-px4-params.
+    param set BAT1_N_CELLS 2
+    param set BAT1_CAPACITY 1300
+
     if ! start_power_monitor; then
         /bin/echo "ERROR: POWER_MONITOR_ONLY needs POWER_MANAGER set to VOXLPM, INA226 or INA228"
         exit 1
