@@ -94,13 +94,18 @@ param load
 
 # POWER_MONITOR_ONLY mode: use PX4 purely as a battery monitor for a system
 # that has its own flight controller. Only the power monitor driver on the
-# DSP and the onboard mavlink link to voxl-mavlink-server are started. No
-# IMU, barometer, magnetometer, GPS, ESC, RC, sensors, estimator, commander
-# or flight control module is started, so PX4 cannot arm or drive anything.
+# DSP and two deliberately quiet mavlink links are started. No IMU,
+# barometer, magnetometer, GPS, ESC, RC, sensors, estimator, commander or
+# flight control module is started, so PX4 cannot arm or drive anything.
 #
-# The onboard mavlink link streams SYS_STATUS (5 Hz) and BATTERY_STATUS by
-# default, which voxl-vision-hub republishes as /run/mpa/mavlink_sys_status
-# for voxl-inspect-battery. Verify on the DSP side with:
+# Both links use '-m custom', which streams nothing but the always-on
+# HEARTBEAT (1 Hz) plus event-driven STATUSTEXT and COMMAND_LONG; SYS_STATUS
+# is added explicitly. The onboard link feeds voxl-vision-hub, which
+# republishes SYS_STATUS as /run/mpa/mavlink_sys_status for
+# voxl-inspect-battery. The GCS link carries only heartbeat and SYS_STATUS
+# to the ground station; once it is up, voxl-mavlink-server stops forwarding
+# the onboard link to the GCS, so nothing else leaks there. Verify on the
+# DSP side with:
 #     px4-listener battery_status
 #
 # Enable with POWER_MONITOR_ONLY=ENABLE in /etc/modalai/voxl-px4.conf
@@ -111,14 +116,13 @@ if [ "$POWER_MONITOR_ONLY" == "ENABLE" ]; then
         exit 1
     fi
 
-    # onboard fast link to voxl-mavlink-server (the GCS link is intentionally
-    # not started so no phantom PX4 autopilot shows up on the ground station)
-    mavlink start -x -u 14556 -o 14557 -r 100000 -n lo -m onboard
+    # onboard link to voxl-mavlink-server, for vision-hub and voxl-inspect-battery
+    mavlink start -x -u 14556 -o 14557 -r 100000 -n lo -m custom
+    mavlink stream -u 14556 -s SYS_STATUS -r 5
 
-    # pin the heartbeat rate explicitly. PX4 defaults to 1 Hz, the stock
-    # flight script raises this link to 10 Hz for VFC mode updates; the GCS
-    # only needs the MAVLink-standard 1 Hz here.
-    mavlink stream -u 14556 -s HEARTBEAT -r 1
+    # GCS link to voxl-mavlink-server, forwarded to the ground station as-is
+    mavlink start -x -u 14558 -o 14559 -r 100000 -n lo -m custom
+    mavlink stream -u 14558 -s SYS_STATUS -r 1
     mavlink boot_complete
 
     /bin/echo "POWER_MONITOR_ONLY mode: done, no flight modules started"
