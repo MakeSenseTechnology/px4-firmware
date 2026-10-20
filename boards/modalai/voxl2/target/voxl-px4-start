@@ -13,12 +13,30 @@ echo "AIRSPEED SENSOR: $AIRSPEED_SENSOR"
 echo "DISTANCE SENSOR: $DISTANCE_SENSOR"
 echo "OSD: $OSD"
 echo "ARTIFACT_MODE: $ARTIFACT_MODE"
+echo "POWER_MONITOR_ONLY: $POWER_MONITOR_ONLY"
 echo "EXTRA STEPS:"
 for i in "${EXTRA_STEPS[@]}"
 do
 	echo -e "\t$i"
 done
 echo -e "*************************\n"
+
+# Start the battery / power monitor driver selected by POWER_MANAGER.
+# Used by both the normal flight configuration and POWER_MONITOR_ONLY mode.
+start_power_monitor() {
+    if [ "$POWER_MANAGER" == "VOXLPM" ]; then
+        # APM power monitor
+        qshell voxlpm start -X -b 2
+    elif [ "$POWER_MANAGER" == "INA226" ]; then
+        /bin/echo "Starting INA226 power monitor"
+        qshell ina226 start -X -b 2
+    elif [ "$POWER_MANAGER" == "INA228" ]; then
+        /bin/echo "Starting INA228 power monitor"
+        qshell ina228 start -X -b 2
+    else
+        return 1
+    fi
+}
 
 # In order to just exit after starting the uorb / muorb modules define
 # the environment variable MINIMAL_PX4. (e.g. export MINIMAL_PX4=1)
@@ -73,6 +91,34 @@ param select /data/px4/param/parameters
 
 # Load in all of the parameters that have been saved in the file
 param load
+
+# POWER_MONITOR_ONLY mode: use PX4 purely as a battery monitor for a system
+# that has its own flight controller. Only the power monitor driver on the
+# DSP and the onboard mavlink link to voxl-mavlink-server are started. No
+# IMU, barometer, magnetometer, GPS, ESC, RC, sensors, estimator, commander
+# or flight control module is started, so PX4 cannot arm or drive anything.
+#
+# The onboard mavlink link streams SYS_STATUS (5 Hz) and BATTERY_STATUS by
+# default, which voxl-vision-hub republishes as /run/mpa/mavlink_sys_status
+# for voxl-inspect-battery. Verify on the DSP side with:
+#     px4-listener battery_status
+#
+# Enable with POWER_MONITOR_ONLY=ENABLE in /etc/modalai/voxl-px4.conf
+if [ "$POWER_MONITOR_ONLY" == "ENABLE" ]; then
+    /bin/echo "POWER_MONITOR_ONLY mode: starting only the $POWER_MANAGER power monitor"
+    if ! start_power_monitor; then
+        /bin/echo "ERROR: POWER_MONITOR_ONLY needs POWER_MANAGER set to VOXLPM, INA226 or INA228"
+        exit 1
+    fi
+
+    # onboard fast link to voxl-mavlink-server (the GCS link is intentionally
+    # not started so no phantom PX4 autopilot shows up on the ground station)
+    mavlink start -x -u 14556 -o 14557 -r 100000 -n lo -m onboard
+    mavlink boot_complete
+
+    /bin/echo "POWER_MONITOR_ONLY mode: done, no flight modules started"
+    exit 0
+fi
 
 
 # IMU (accelerometer / gyroscope)
@@ -232,16 +278,7 @@ if [ "$DISTANCE_SENSOR" == "LIGHTWARE_SF000" ]; then
 	qshell lightware_laser_serial start -d 7
 fi
 
-if [ "$POWER_MANAGER" == "VOXLPM" ]; then
-	# APM power monitor
-	qshell voxlpm start -X -b 2
-elif [ "$POWER_MANAGER" == "INA226" ]; then
-	/bin/echo "Starting INA226 power monitor"
-	qshell ina226 start -X -b 2
-elif [ "$POWER_MANAGER" == "INA228" ]; then
-	/bin/echo "Starting INA228 power monitor"
-	qshell ina228 start -X -b 2
-fi
+start_power_monitor
 
 if [ "$AIRSPEED_SENSOR" == "MS4525DO" ]; then
 	qshell ms4525do start -X -b 4
