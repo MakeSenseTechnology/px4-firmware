@@ -133,12 +133,16 @@ if [ "$POWER_MONITOR_ONLY" == "ENABLE" ]; then
         exit 1
     fi
 
-    # 'mavlink start' waits at most 100 ms for the new instance to register,
-    # but since PX4 v1.16 the instance constructor first blocks ~1 s on a
-    # dataman client handshake (dataman is not started in this mode), so an
-    # immediate 'mavlink stream' finds no instance, warns "mavlink for network
-    # on port N is not running" and the link stays heartbeat-only. Retry until
-    # the instance is up; this also serialises the two instance starts.
+    # Since PX4 v1.16 every mavlink instance does a dataman client handshake
+    # in its constructor, before it registers. With no dataman server that
+    # handshake runs to its 1 s timeout, longer than the 100 ms 'mavlink start'
+    # waits, so an immediate 'mavlink stream' finds no instance, warns
+    # "mavlink for network on port N is not running" and the link stays
+    # heartbeat-only. Start dataman so the handshake answers at once (it is
+    # idle afterwards: one poll wakeup per second, nothing here writes to it)
+    # and still retry the stream command in case registration is ever slow.
+    dataman start
+
     add_sys_status_stream() {   # <udp port> <rate Hz>
         for i in 1 2 3 4 5 6 7 8 9 10; do
             if mavlink stream -u $1 -s SYS_STATUS -r $2; then
